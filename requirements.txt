@@ -1,1 +1,4 @@
 openai>=1.40.0
+sympy>=1.13.0
+python-constraint>=1.4.0
+llama-cpp-python>=0.2.90
