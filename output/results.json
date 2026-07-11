@@ -1,0 +1,22 @@
+[
+  {
+    "task_id": "practice-01",
+    "answer": "MOCK_ANSWER for: What is the capital of Australia, and wh"
+  },
+  {
+    "task_id": "practice-02",
+    "answer": "MOCK_ANSWER for: A store has 240 items. It sells 15% on M"
+  },
+  {
+    "task_id": "practice-03",
+    "answer": "MOCK_ANSWER for: Classify the sentiment of this review: T"
+  },
+  {
+    "task_id": "practice-05",
+    "answer": "MOCK_ANSWER for: Extract all named entities and their typ"
+  },
+  {
+    "task_id": "practice-07",
+    "answer": "MOCK_ANSWER for: Three friends, Sam, Jo, and Lee, each ow"
+  }
+]
