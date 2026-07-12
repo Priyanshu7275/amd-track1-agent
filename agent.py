@@ -497,6 +497,8 @@ def main():
         prompt = task["prompt"]
         category = classify(prompt)
         answer = None
+
+        # Layer 1: deterministic solvers
         if category == "math":
             answer = solve_math(prompt)
         elif category == "logic":
@@ -507,15 +509,17 @@ def main():
             answer = solve_sentiment(prompt)
         elif category == "factual":
             answer = solve_factual(prompt)
+
+        # Layer 2: local LLM - only skip if running out of time RIGHT NOW
         elapsed = time.time() - start_time
         budget_left = BUDGET_SECONDS - elapsed
-        remaining_tasks = len(tasks) - i
-        est_needed = remaining_tasks * 20
-        use_local_llm = (answer is None or answer == "") and budget_left > est_needed
-        if (answer is None or answer == "") and use_local_llm:
+
+        if (answer is None or answer == "") and budget_left > 30:
             answer = local_llm_answer(category, prompt)
             if answer:
                 print("[", tid, "] local_llm answered (", int(time.time()-start_time), "s)", file=sys.stderr)
+
+        # Layer 3: Fireworks fallback
         if answer is None or answer == "":
             try:
                 answer = fireworks_answer(client, default_model, category, prompt)
@@ -523,8 +527,17 @@ def main():
             except Exception as e:
                 print("[", tid, "] fireworks failed:", e, file=sys.stderr)
                 answer = ""
+
+        # Sanitize output
+        if answer is None:
+            answer = ""
+        if not isinstance(answer, str):
+            answer = str(answer)
+        answer = "".join(c for c in answer if c == "\n" or c == "\t" or ord(c) >= 32)
+
         print("[", tid, "] category=", category, "->", repr(answer[:60]), file=sys.stderr)
         results.append({"task_id": tid, "answer": answer})
+
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
