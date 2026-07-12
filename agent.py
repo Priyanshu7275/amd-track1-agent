@@ -41,7 +41,7 @@ INPUT_PATH = "/input/tasks.json"
 OUTPUT_PATH = "/output/results.json"
 _MODEL_PATH = "/app/models/qwen-finetuned-q4_k_m.gguf"
 _LOCAL_LLM = None
-BUDGET_SECONDS = 510
+BUDGET_SECONDS = 560
 
 # ==================== CLASSIFIER ====================
 def classify(prompt):
@@ -406,7 +406,7 @@ def load_local_llm():
         print("[local_llm] loading model from", _MODEL_PATH, file=sys.stderr)
         _LOCAL_LLM = Llama(
             model_path=_MODEL_PATH,
-            n_ctx=1536,
+            n_ctx=768,
             n_threads=2,
             n_batch=256,
             verbose=False,
@@ -454,8 +454,8 @@ SYSTEM_PROMPTS = {
     "factual":"Answer directly and concisely. No preamble.",
 }
 MAX_TOKENS = {
-    "math":32,"sentiment":8,"ner":96,"summarization":80,
-    "code_debug":256,"code_gen":256,"logic":16,"factual":96,
+    "math":16,"sentiment":4,"ner":64,"summarization":48,
+    "code_debug":128,"code_gen":128,"logic":8,"factual":48,
 }
 
 def fireworks_answer(client, model, category, prompt):
@@ -471,7 +471,105 @@ def fireworks_answer(client, model, category, prompt):
         temperature=0.0,
     )
     return resp.choices[0].message.content.strip()
+# ==================== CODE VERIFIER ====================
+import subprocess
+import tempfile
 
+def extract_function_name(code):
+    m = re.search(r"def\s+(\w+)\s*\(", code)
+    return m.group(1) if m else None
+
+def build_test_call(code, category, prompt):
+    fn = extract_function_name(code)
+    if not fn:
+        return None
+
+    p = prompt.lower()
+
+    if "reverse" in p and "string" in p:
+        return f"assert {fn}('hello') == 'olleh'"
+    if "palindrome" in p:
+        return f"assert {fn}('racecar') == True and {fn}('hello') == False"
+    if "count" in p and "vowel" in p:
+        return f"assert {fn}('hello') == 2"
+    if "factorial" in p:
+        return f"assert {fn}(5) == 120"
+    if "prime" in p:
+        return f"assert {fn}(7) == True and {fn}(4) == False"
+    if "fibonacci" in p:
+        return f"result = {fn}(5)\nassert result[:5] == [0, 1, 1, 2, 3] or result[:5] == [1, 1, 2, 3, 5]"
+    if "sum" in p and "list" in p:
+        return f"assert {fn}([1, 2, 3]) == 6"
+    if "average" in p or "mean" in p:
+        return f"assert {fn}([2, 4, 6]) == 4"
+    if "largest" in p or "max" in p:
+        if "second" in p:
+            return f"assert {fn}([1, 2, 3, 3]) == 2"
+        return f"assert {fn}([3, 1, 4, 1, 5]) == 5"
+    if "smallest" in p or "min" in p:
+        if "second" in p:
+            return f"assert {fn}([1, 2, 3, 3]) == 2"
+        return f"assert {fn}([3, 1, 4, 1, 5]) == 1"
+    if "even" in p:
+        return f"assert {fn}(4) == True and {fn}(3) == False"
+    if "odd" in p:
+        return f"assert {fn}(3) == True and {fn}(4) == False"
+    if "leap" in p and "year" in p:
+        return f"assert {fn}(2020) == True and {fn}(2021) == False"
+    if "intersection" in p:
+        return f"result = {fn}([1, 2, 3], [2, 3, 4])\nassert set(result) == {{2, 3}}"
+    if "anagram" in p:
+        return f"assert {fn}('listen', 'silent') == True"
+    if "gcd" in p:
+        return f"assert {fn}(12, 18) == 6"
+    if "square" in p and "list" in p:
+        return f"assert {fn}([1, 2, 3]) == [1, 4, 9]"
+    if "word" in p and "count" in p:
+        return f"assert {fn}('hello world foo') == 3"
+    if "flatten" in p:
+        return f"result = {fn}([1, [2, [3, 4]], 5])\nassert result == [1, 2, 3, 4, 5]"
+    if "duplicate" in p and "remove" in p:
+        return f"result = {fn}([1, 2, 2, 3])\nassert result == [1, 2, 3]"
+    if "celsius" in p and "fahrenheit" in p:
+        return f"assert {fn}(0) == 32 and {fn}(100) == 212"
+
+    return f"try:\n    _r = {fn}([1, 2, 3])\nexcept: pass"
+
+def run_python_code(code, test_call, timeout_sec=3):
+    try:
+        full_code = code + "\n\n" + (test_call or "")
+        result = subprocess.run(
+            ["python", "-c", full_code],
+            capture_output=True,
+            timeout=timeout_sec,
+            text=True,
+        )
+        return result.returncode == 0
+    except subprocess.TimeoutExpired:
+        return False
+    except Exception:
+        return False
+
+def verify_and_regenerate_code(category, prompt, initial_answer, max_retries=2):
+    if not initial_answer:
+        return initial_answer
+
+    test_call = build_test_call(initial_answer, category, prompt)
+    if not test_call:
+        return initial_answer
+
+    if run_python_code(initial_answer, test_call):
+        return initial_answer
+
+    for attempt in range(max_retries):
+        print(f"[verifier] retry {attempt+1} for {category}", file=sys.stderr)
+        new_answer = local_llm_answer(category, prompt)
+        if new_answer and new_answer != initial_answer:
+            if run_python_code(new_answer, test_call):
+                return new_answer
+
+    return initial_answer
+# ==================== MAIN ====================
 # ==================== MAIN ====================
 def main():
     start_time = time.time()
@@ -510,7 +608,7 @@ def main():
         elif category == "factual":
             answer = solve_factual(prompt)
 
-        # Layer 2: local LLM - only skip if running out of time RIGHT NOW
+        # Layer 2: local LLM
         elapsed = time.time() - start_time
         budget_left = BUDGET_SECONDS - elapsed
 
@@ -518,6 +616,12 @@ def main():
             answer = local_llm_answer(category, prompt)
             if answer:
                 print("[", tid, "] local_llm answered (", int(time.time()-start_time), "s)", file=sys.stderr)
+                # Verify code answers by execution
+                if category in ("code_gen", "code_debug") and budget_left > 60:
+                    verified = verify_and_regenerate_code(category, prompt, answer, max_retries=2)
+                    if verified != answer:
+                        print("[", tid, "] code regenerated after verification", file=sys.stderr)
+                    answer = verified
 
         # Layer 3: Fireworks fallback
         if answer is None or answer == "":
