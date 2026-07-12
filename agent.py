@@ -39,7 +39,7 @@ from openai import OpenAI
 
 INPUT_PATH = "/input/tasks.json"
 OUTPUT_PATH = "/output/results.json"
-_MODEL_PATH = "/app/models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+_MODEL_PATH = "/app/models/qwen-finetuned-q4_k_m.gguf"
 _LOCAL_LLM = None
 BUDGET_SECONDS = 510
 

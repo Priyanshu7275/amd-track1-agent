@@ -16,8 +16,8 @@ ENV FORCE_CMAKE=1
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN mkdir -p /app/models && \
-    curl -L -o /app/models/qwen2.5-1.5b-instruct-q4_k_m.gguf \
-    "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    curl -L -o /app/models/qwen-finetuned-q4_k_m.gguf \
+    "https://huggingface.co/priyanshu941/track1-qwen-finetuned/resolve/main/qwen-finetuned-q4_k_m.gguf"
 
 RUN apt-get purge -y --auto-remove build-essential cmake curl && \
     rm -rf /var/lib/apt/lists/*
