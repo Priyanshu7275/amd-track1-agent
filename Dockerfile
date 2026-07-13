@@ -14,14 +14,15 @@ COPY requirements.txt .
 ENV CMAKE_ARGS="-DGGML_NATIVE=OFF -DGGML_OPENMP=ON"
 ENV FORCE_CMAKE=1
 RUN pip install --no-cache-dir -r requirements.txt
-
+RUN python -m spacy download en_core_web_sm
 RUN mkdir -p /app/models && \
     curl -L -o /app/models/qwen-finetuned-q4_k_m.gguf \
     "https://huggingface.co/priyanshu941/track1-qwen-finetuned/resolve/main/qwen-finetuned-q4_k_m.gguf"
 
 RUN apt-get purge -y --auto-remove build-essential cmake curl && \
     rm -rf /var/lib/apt/lists/*
-
+    
+COPY facts.json .
 COPY agent.py .
 
 ENTRYPOINT ["python", "-u", "agent.py"]
