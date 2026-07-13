@@ -38,6 +38,19 @@ except Exception:
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
     _VADER = SentimentIntensityAnalyzer()
+    # VADER's lexicon is general English. These are product-review terms it
+    # scores as neutral but which carry clear polarity in this domain.
+    _VADER.lexicon.update({
+        "drains": -1.5, "draining": -1.5, "drain": -1.5,
+        "scratches": -1.5, "scratched": -1.5,
+        "overheats": -2.0, "overheating": -2.0,
+        "flimsy": -2.0, "tinny": -1.5, "itchy": -1.5,
+        "sluggish": -1.8, "clunky": -1.8, "bloated": -1.5,
+        "deafening": -2.0, "appalling": -3.0, "absurd": -2.0,
+        "crisp": 1.5, "premium": 1.8, "sturdy": 1.5,
+        "responsive": 1.5, "intuitive": 1.8, "seamless": 1.8,
+        "vivid": 1.5, "sleek": 1.5, "spacious": 1.5,
+    })
     _HAVE_VADER = True
 except Exception:
     _VADER = None
